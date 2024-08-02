@@ -8,12 +8,16 @@
 ## Packages ########################################################
 library(dplyr) ; library(tidyr)
 
-## Directories #####################################################
+## Directories & functions #####################################################
 root <- rprojroot::has_file(".git/index")
 datadir = root$find_file("data")
 funsdir = root$find_file("functions")
 savingdir = root$find_file("saved_files")
 path_grump = root$find_file('data/grump_asv_long_May21_24.csv')
+path_complete_finnest <- root$find_file('functions/complete_finnest_taxa.R')
+source(path_complete_finnest)
+
+
 df_grump_all <- data.table::fread(path_grump) %>% 
   filter(Cruise %in% c('P16N','P16S')) %>% 
   mutate(Raw.Sequence.Counts = Corrected_sequence_counts) %>% 

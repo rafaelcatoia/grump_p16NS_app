@@ -1,106 +1,159 @@
+########################################################
+## Script that generates all the files of the shiny app
+## We load grump_P16NS.csv load grump_P16NS_phyto.csv and load grump_P16NS_zoop.csv
+## that were generated in 00_Subsetting-GRUMP...
+########################################################
+
+## Packages ########################################################
+library(dplyr) ; library(tidyr)
+
+## Directories and dataframes #####################################################
+root <- rprojroot::has_file(".git/index")
+datadir = root$find_file("data")
+funsdir = root$find_file("functions")
+savingdir = root$find_file("saved_files")
+path_grump_all <- root$find_file("data/grump_P16NS.csv")
+path_grump_phyto <- root$find_file("data/grump_P16NS_phyto.csv")
+path_grump_zoop <- root$find_file("data/grump_P16NS_zoop.csv")
+
+df_grump_all <- data.table::fread(path_grump_all) %>% as.data.frame()
+df_grump_phyto <- data.table::fread(path_grump_phyto) %>% as.data.frame()
+df_grump_zoop <- data.table::fread(path_grump_zoop) %>% as.data.frame()
 
 
+## Functions #####################################################
 
 normalizeMatrix <- function(X){
   normMat = norm(X,type='2')
   return(X/normMat)
 }
 
-#files_vec <- list.files(funsdir)
-#
-#for( i in 1:length(files_vec)){
-#  source(root$find_file(paste0(funsdir,'/',files_vec[i])))
-#}
+path_complete_finnest <- root$find_file('functions/complete_finnest_taxa.R')
+source(path_complete_finnest)
 
-# dat_tax = data.table::fread('https://raw.githubusercontent.com/rafaelcatoia/zoop_16N/main/treated_taxonomy_dat.csv') %>%
-#   as_tibble()
 
-### Loading the new data 
+path_create_biotic_dist_matrices <- root$find_file('functions/create_biotic_dist_matrices')
+source(path_create_biotic_dist_matrices)
 
-## Use this if you are using the new GRUMP Data Set
-datapath = root$find_file(paste0(datadir,'/','grump_phyto.csv'))
-
-dframe = data.table::fread(input = datapath) %>%
-  filter(Cruise %in% c('P16N','P16S')) %>% 
-  #filter(Raw.Sequence.Counts>0) %>% 
-  #filter(Domain!='Unassigned') %>% 
-  mutate(Raw.Sequence.Counts = Corrected_sequence_counts) %>% 
-  #### New filter by Depth!
-  filter(Depth<600)
-
-### -----------------------------------------------------------
-## Creating abiotics dataframe  -------------------------------
-### -----------------------------------------------------------
+##############################################################################################
+## 01 - Creating df_abiotic of each subset ###################################################
+##############################################################################################
 vet_abiotic = c(
-  "Temperature",
-  "Salinity",
-  "Oxygen",
-  "Silicate",
-  "NO2",
-  "NO3",#this causes duplicates
-  #"NH3",#this is empty
-  "PO4"
-)
+  "Temperature","Salinity",
+  "Oxygen","Silicate","NO2","NO3","PO4")
 
-## Filtering the abiotics per sample
-df_geo_abiotics <- dframe %>%
-  select(SampleID,one_of(vet_abiotic),Latitude,Longitude,Depth,Longhurst_Short) %>%
-  mutate(Oxygen=ifelse(Oxygen<0,NA,Oxygen),NO3=ifelse(NO3<0,NA,NO3)) %>% 
-  distinct() %>% arrange(SampleID)
+##############################################################################################
+## 01 - Creating df_abiotic of each subset ###################################################
+##############################################################################################
 
-
-## Solving the missing problem -------------------------------------------------
-
-df_geo_abiotics <- dframe %>%
+## All ----------------------------------------------------
+df_geo_abiotics_all <- df_grump_all %>%
   select(SampleID,one_of(vet_abiotic),Latitude,Longitude,Depth,Longhurst_Short) %>%
   distinct() %>% arrange(SampleID)
 
+## Fixing missing
+df_geo_abiotics_all$Oxygen[df_geo_abiotics_all$SampleID=='P16N-S40-N10'] <- 212.9
+df_geo_abiotics_all$NO3[df_geo_abiotics_all$SampleID=='P16S-S05-N15'] <- 1.375
+df_geo_abiotics_all$Oxygen[df_geo_abiotics_all$SampleID=='P16S-S96-N28'] <- 346.9
 
-## Here we have the sample with missing values on Oxygen and NO3
-df_geo_abiotics %>% 
-  filter(NO3<0 |Oxygen<0)
+## Phyto ----------------------------------------------------
+df_geo_abiotics_phyto <- df_grump_phyto %>%
+  select(SampleID,one_of(vet_abiotic),Latitude,Longitude,Depth,Longhurst_Short) %>%
+  distinct() %>% arrange(SampleID)
+
+## Fixing missing
+df_geo_abiotics_phyto$Oxygen[df_geo_abiotics_phyto$SampleID=='P16N-S40-N10'] <- 212.9
+df_geo_abiotics_phyto$NO3[df_geo_abiotics_phyto$SampleID=='P16S-S05-N15'] <- 1.375
+df_geo_abiotics_phyto$Oxygen[df_geo_abiotics_phyto$SampleID=='P16S-S96-N28'] <- 346.9
+
+## Zoop ----------------------------------------------------
+df_geo_abiotics_zoop <- df_grump_zoop %>%
+  select(SampleID,one_of(vet_abiotic),Latitude,Longitude,Depth,Longhurst_Short) %>%
+  distinct() %>% arrange(SampleID)
+
+## Fixing missing
+df_geo_abiotics_zoop$Oxygen[df_geo_abiotics_zoop$SampleID=='P16N-S40-N10'] <- 212.9
+df_geo_abiotics_zoop$NO3[df_geo_abiotics_zoop$SampleID=='P16S-S05-N15'] <- 1.375
+df_geo_abiotics_zoop$Oxygen[df_geo_abiotics_zoop$SampleID=='P16S-S96-N28'] <- 346.9
+
+## Storing ----------------------------------------------------
+list_geo_abiotics<-list()
+list_geo_abiotics$all <- df_geo_abiotics_all %>% arrange(SampleID)
+list_geo_abiotics$phyto <- df_geo_abiotics_phyto %>% arrange(SampleID)
+list_geo_abiotics$zoop <- df_geo_abiotics_zoop %>% arrange(SampleID)
+saveRDS(list_geo_abiotics,paste0(savingdir,'/list_geo_abiotcs'))
 
 
-## First inputation = 212.9
-df_geo_abiotics %>% filter(Latitude ==18) %>% arrange(Depth)
-df_geo_abiotics$Oxygen[df_geo_abiotics$SampleID=='P16N-S40-N10'] <- 212.9
+##############################################################################################
+## 02 - Creating biotic_distance matrices of each subset #####################################
+##############################################################################################
 
-## Second inputation = 0.13 + 2.49 / 2 = 1.375
-df_geo_abiotics %>% filter(Latitude ==-18.0) %>% arrange(Depth)
-df_geo_abiotics$NO3[df_geo_abiotics$SampleID=='P16S-S05-N15'] <- 1.375
+## 02.1 Identifing finest taxonomic level -----------------------------------------------------------------------------------
+## Fixing Taxonomy 
+vet_tax_names <- c('Domain','Phylum','Class','Order','Family','Genus','Species')
 
-## Third inputation = 346.9
-df_geo_abiotics %>% filter(Latitude ==-63.5) %>% arrange(Depth)
-df_geo_abiotics$Oxygen[df_geo_abiotics$SampleID=='P16S-S96-N28'] <- 346.9
+df_grump_tax_wide = 
+  df_grump_all %>% select(ASV_hash,Supergroup) %>% distinct() %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Division) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Domain) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Phylum) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Class) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Order) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Family) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Genus) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Species) %>% distinct()) %>% 
+  left_join(df_grump_all %>% select(ASV_hash,Eco_relevant_plank_groups) %>% distinct()) 
+  
+# df_grump_tax_wide %>% select(-ASV_hash) %>% apply(.,2,function(x){sum(x=='')})
 
-## Saving the abiotics df
-saveRDS(df_geo_abiotics,file = paste0(savingdir,'/','df_geo_abiotics'))
-dim(df_geo_abiotics)
+df_grump_tax_wide = df_grump_tax_wide %>% select(ASV_hash,Supergroup,Division,Eco_relevant_plank_groups) %>% 
+  bind_cols(complete_finnest_taxa(df_grump_tax_wide %>% select(-ASV_hash,-Supergroup,-Division,-Eco_relevant_plank_groups)))
 
-## Saving the filtered Grump stacked
-saveRDS(dframe,file = paste0(savingdir,'/','dfGrump_longer_filtered'))
 
-## Creating distance matrices ----------------------------------------------------------------
+vet_tax_names <- c('Supergroup','Division','Domain','Phylum','Class','Order','Family','Genus','Species','Eco_relevant_plank_groups')
+
+df_grump_all = df_grump_all %>% select(-any_of(vet_tax_names)) %>% 
+  left_join(df_grump_tax_wide)
+
+df_grump_phyto = df_grump_phyto %>% select(-any_of(vet_tax_names)) %>% 
+  left_join(df_grump_tax_wide)
+
+df_grump_zoop = df_grump_phyto %>% select(-any_of(vet_tax_names)) %>% 
+  left_join(df_grump_tax_wide)
+
+#################################################################################################################
+## Creating distance matrices -----------------------------------------------------------------------------------
+#################################################################################################################
+
 list_dist_matrices_normalized <- list()
 list_dist_matrices <- list()
 
-df_geo_abiotics = df_geo_abiotics %>% arrange(SampleID)
+df_geo_abiotics_all = df_geo_abiotics_all %>% arrange(SampleID)
+df_geo_abiotics_phyto = df_geo_abiotics_phyto %>% arrange(SampleID)
+df_geo_abiotics_zoop = df_geo_abiotics_zoop %>% arrange(SampleID)
 
-## First the normalized ones 
+#################################################################################################################
+#################################################################################################################
+## Creating distance matrices ----------------------------- All Plankton ----------------------------------------
+#################################################################################################################
+#################################################################################################################
+abiotic_list_dist_matrices <- list()
 
-list_dist_matrices$geo = df_geo_abiotics %>% 
+abiotic_list_dist_matrices$all_grump<-list()
+
+abiotic_list_dist_matrices$all_grump$geo = df_geo_abiotics_all %>% 
   mutate(Latitude = abs(Latitude)) %>% 
   transmute(lat_scaled = (Latitude -mean(Latitude)) /sd(Latitude),
             depht_scaled = (Depth -mean(Depth)) /sd(Depth)) %>%
   as.matrix() %>% dist() %>% as.matrix()
 
-list_dist_matrices_normalized$geo = df_geo_abiotics %>% 
+abiotic_list_dist_matrices$all_grump$geo_normalized = df_geo_abiotics_all %>% 
   mutate(Latitude = abs(Latitude)) %>% 
   transmute(lat_scaled = (Latitude -mean(Latitude)) /sd(Latitude),
             depht_scaled = (Depth -mean(Depth)) /sd(Depth)) %>%
   as.matrix() %>% dist() %>% as.matrix() %>% normalizeMatrix()
 
-list_dist_matrices$abiotic <- df_geo_abiotics %>% 
+abiotic_list_dist_matrices$all_grump$abiotic <- df_geo_abiotics_all %>% 
   transmute(Temperature = scale(Temperature),
             Salinity = scale(Salinity),
             Oxygen = scale(Oxygen),
@@ -110,7 +163,7 @@ list_dist_matrices$abiotic <- df_geo_abiotics %>%
             PO4 = scale(PO4)) %>% 
   as.matrix() %>% dist() %>% as.matrix() #%>%  normalizeMatrix()
 
-list_dist_matrices_normalized$abiotic <- df_geo_abiotics %>% 
+abiotic_list_dist_matrices$all_grump$abiotic_normalized <- df_geo_abiotics_all %>% 
   transmute(Temperature = scale(Temperature),
             Salinity = scale(Salinity),
             Oxygen = scale(Oxygen),
@@ -120,603 +173,253 @@ list_dist_matrices_normalized$abiotic <- df_geo_abiotics %>%
             PO4 = scale(PO4)) %>% 
   as.matrix() %>% dist() %>% as.matrix() %>%  normalizeMatrix()
 
-#######################################################################################
-# Now lets create the biotic part.
-###########################################################################################################s
+#################################################################################################################
+#################################################################################################################
+## Creating distance matrices ----------------------------- Phyto ----------------------------------------
+#################################################################################################################
+#################################################################################################################
 
-## First defining the ASVs that are " rare "
-df_asvs_appearence = dframe %>% 
+abiotic_list_dist_matrices$phyto<-list()
+
+abiotic_list_dist_matrices$phyto$geo = df_geo_abiotics_phyto %>% 
+  mutate(Latitude = abs(Latitude)) %>% 
+  transmute(lat_scaled = (Latitude -mean(Latitude)) /sd(Latitude),
+            depht_scaled = (Depth -mean(Depth)) /sd(Depth)) %>%
+  as.matrix() %>% dist() %>% as.matrix()
+
+abiotic_list_dist_matrices$phyto$geo_normalized = df_geo_abiotics_phyto %>% 
+  mutate(Latitude = abs(Latitude)) %>% 
+  transmute(lat_scaled = (Latitude -mean(Latitude)) /sd(Latitude),
+            depht_scaled = (Depth -mean(Depth)) /sd(Depth)) %>%
+  as.matrix() %>% dist() %>% as.matrix() %>% normalizeMatrix()
+
+abiotic_list_dist_matrices$phyto$abiotic <- df_geo_abiotics_phyto %>% 
+  transmute(Temperature = scale(Temperature),
+            Salinity = scale(Salinity),
+            Oxygen = scale(Oxygen),
+            Silicate = scale(Silicate),
+            NO2 = scale(NO2),
+            NO2 = scale(NO3),
+            PO4 = scale(PO4)) %>% 
+  as.matrix() %>% dist() %>% as.matrix() #%>%  normalizeMatrix()
+
+abiotic_list_dist_matrices$phyto$abiotic_normalized <- df_geo_abiotics_phyto %>% 
+  transmute(Temperature = scale(Temperature),
+            Salinity = scale(Salinity),
+            Oxygen = scale(Oxygen),
+            Silicate = scale(Silicate),
+            NO2 = scale(NO2), 
+            NO2 = scale(NO3),
+            PO4 = scale(PO4)) %>% 
+  as.matrix() %>% dist() %>% as.matrix() %>%  normalizeMatrix()
+
+#################################################################################################################
+#################################################################################################################
+## 03 - Creating distance matrices ----------------------------- Zoop ----------------------------------------
+#################################################################################################################
+#################################################################################################################
+
+abiotic_list_dist_matrices$zoop<-list()
+
+abiotic_list_dist_matrices$zoop$geo = df_geo_abiotics_zoop %>% 
+  mutate(Latitude = abs(Latitude)) %>% 
+  transmute(lat_scaled = (Latitude -mean(Latitude)) /sd(Latitude),
+            depht_scaled = (Depth -mean(Depth)) /sd(Depth)) %>%
+  as.matrix() %>% dist() %>% as.matrix()
+
+abiotic_list_dist_matrices$zoop$geo_normalized = df_geo_abiotics_zoop %>% 
+  mutate(Latitude = abs(Latitude)) %>% 
+  transmute(lat_scaled = (Latitude -mean(Latitude)) /sd(Latitude),
+            depht_scaled = (Depth -mean(Depth)) /sd(Depth)) %>%
+  as.matrix() %>% dist() %>% as.matrix() %>% normalizeMatrix()
+
+abiotic_list_dist_matrices$zoop$abiotic <- df_geo_abiotics_zoop %>% 
+  transmute(Temperature = scale(Temperature),
+            Salinity = scale(Salinity),
+            Oxygen = scale(Oxygen),
+            Silicate = scale(Silicate),
+            NO2 = scale(NO2),
+            NO2 = scale(NO3),
+            PO4 = scale(PO4)) %>% 
+  as.matrix() %>% dist() %>% as.matrix() #%>%  normalizeMatrix()
+
+abiotic_list_dist_matrices$zoop$abiotic_normalized <- df_geo_abiotics_zoop %>% 
+  transmute(Temperature = scale(Temperature),
+            Salinity = scale(Salinity),
+            Oxygen = scale(Oxygen),
+            Silicate = scale(Silicate),
+            NO2 = scale(NO2), 
+            NO2 = scale(NO3),
+            PO4 = scale(PO4)) %>% 
+  as.matrix() %>% dist() %>% as.matrix() %>%  normalizeMatrix()
+
+
+saveRDS(abiotic_list_dist_matrices,paste0(savingdir,'/geo-abiotic-list-dist-matrices'))
+## In case I prefer separated files ::
+saveRDS(abiotic_list_dist_matrices$all_grump,paste0(savingdir,'/geo-abiotic-list-dist-matrices-all-grump'))
+saveRDS(abiotic_list_dist_matrices$phyto,paste0(savingdir,'/geo-abiotic-list-dist-matrices-all-phyto'))
+saveRDS(abiotic_list_dist_matrices$zoop,paste0(savingdir,'/geo-abiotic-list-dist-matrices-all-zoop'))
+
+#################################################################################################################
+#################################################################################################################
+## 04 - Creating Biotic Distance Matrices
+#################################################################################################################
+#################################################################################################################
+
+## 04.1 Identifying rare ASVs, i.e. which ASVs are present in only one samples ###############
+df_asvs_appearence = df_grump_all %>% 
   select(SampleID,ASV_hash) %>% distinct() %>% 
   group_by(ASV_hash) %>% 
   summarise(n_samples = n()) %>% arrange(n_samples)
 
-vet_asv_at_least_two_samples <- df_asvs_appearence %>% filter(n_samples>1) %>% 
-  select(ASV_hash) %>% pull()
+not_rare_asvs <- df_asvs_appearence %>% filter(n_samples>1)
 
-# vet_asv_at_least_three_samples <- df_asvs_appearence %>% filter(n_samples>2) %>% 
-#   select(ASV_hash) %>% pull()
+min_raw_count<-list()
+min_raw_count$all_grump <- df_grump_all %>% select(Raw.Sequence.Counts) %>% min()
+min_raw_count$phyto <- df_grump_phyto %>% select(Raw.Sequence.Counts) %>% min()
+min_raw_count$zoop <- df_grump_zoop %>% select(Raw.Sequence.Counts) %>% min()
 
+## Since all of them have the same minimun small count:
+min_raw_count = min_raw_count$zoop/100
 
-## adding a small value to make sure we can calculate aitchison distances
+#################################################################################################################
+## 04.2 - Creating Biotic Distance Matrices - ALL Grump
+#################################################################################################################
+biotic_list_dist_matrices_all_grump <- create_biotic_dist_matrices(
+  df_grump_all,min_raw_count = 0.01,
+  vet_asv_at_least_two_samples = not_rare_asvs)
 
-min_raw_count=dframe %>%
-  select(Raw.Sequence.Counts) %>% min()
+biotic_list_dist_matrices_phyto <- create_biotic_dist_matrices(
+  df_grump_phyto,min_raw_count = 0.01,
+  vet_asv_at_least_two_samples = not_rare_asvs)
 
-min_raw_count = min_raw_count/100
-
-biotic_list_dist <- list()
-biotic_list_dist_at_least_two <- list()
-##########################################################################################
-# ASV ####################################################################################
-##########################################################################################
-
-biotic_list_dist$ASV <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,ASV_hash,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,ASV_hash) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = ASV_hash ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$ASV_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,ASV_hash,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,ASV_hash) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = ASV_hash ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$ASV <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,ASV_hash,Raw.Sequence.Counts) %>% distinct() %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  group_by(SampleID,ASV_hash) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = ASV_hash ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$ASV_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,ASV_hash,Raw.Sequence.Counts) %>% distinct() %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  group_by(SampleID,ASV_hash) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = ASV_hash ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-##########################################################################################
-# Species ################################################################################
-##########################################################################################
-
-
-biotic_list_dist$Species <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Species,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Species) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Species ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Species_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Species,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Species) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Species ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Species <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Species,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Species) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Species ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Species_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Species,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Species) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Species ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-
-##########################################################################################
-# Genus ################################################################################
-##########################################################################################
-
-biotic_list_dist$Genus <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Genus,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Genus) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Genus ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Genus_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Genus,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Genus) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Genus ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Genus <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Genus,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Genus) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Genus ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Genus_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Genus,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Genus) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Genus ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-##########################################################################################
-# Family ################################################################################
-##########################################################################################
-
-biotic_list_dist$Family <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Family,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Family) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Family ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Family_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Family,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Family) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Family ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Family <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Family,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Family) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Family ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Family_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Family,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Family) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Family ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-##########################################################################################
-# Order ################################################################################
-##########################################################################################
-
-biotic_list_dist$Order <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Order,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Order) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Order ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Order_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Order,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Order) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Order ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Order <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Order,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Order) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Order ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Order_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Order,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Order) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Order ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-##########################################################################################
-# Class ################################################################################
-##########################################################################################
-
-biotic_list_dist$Class <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Class,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Class) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Class ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Class_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Class,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Class) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Class ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Class <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Class,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Class) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Class ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Class_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Class,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Class) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Class ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-##########################################################################################
-# Division ################################################################################
-##########################################################################################
-
-biotic_list_dist$Division <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Division,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Division) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Division ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Division_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Division,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Division) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Division ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Division <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Division,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Division) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Division ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Division_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Division,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Division) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Division ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-##########################################################################################
-# Supergroup ################################################################################
-##########################################################################################
-
-biotic_list_dist$Supergroup <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Supergroup,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Supergroup) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Supergroup ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist$Supergroup_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  select(SampleID,Supergroup,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Supergroup) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Supergroup ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
-
-biotic_list_dist_at_least_two$Supergroup <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Supergroup,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Supergroup) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Supergroup ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() #%>% normalizeMatrix()
-
-biotic_list_dist_at_least_two$Supergroup_normalized <- dframe %>%
-  mutate(Raw.Sequence.Counts=Raw.Sequence.Counts + min_raw_count) %>% 
-  filter(ASV_hash%in%vet_asv_at_least_two_samples) %>% 
-  select(SampleID,Supergroup,Raw.Sequence.Counts) %>% distinct() %>% 
-  group_by(SampleID,Supergroup) %>% 
-  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
-  tidyr::pivot_wider(id_cols = SampleID,names_from = Supergroup ,
-                     values_from = Sum_RawCounts,
-                     values_fill = min_raw_count) %>%
-  data.frame() %>% 
-  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
-  relocate(SampleID,sort(names(.))) %>% 
-  arrange(SampleID) %>% 
-  select(-SampleID) %>% 
-  vegan::vegdist(method = 'aitchison') %>% as.matrix() %>% normalizeMatrix()
-
+biotic_list_dist_matrices_zoop <- create_biotic_dist_matrices(
+  df_grump_zoop,min_raw_count = 0.01,
+  vet_asv_at_least_two_samples = not_rare_asvs)
 
 ## So here we have two different list of distance matrices. 
-saveRDS(list_dist_matrices,file = paste0(savingdir,'/','list_dist_matrices'))
-saveRDS(list_dist_matrices_normalized,file = paste0(savingdir,'/','list_dist_matrices_normalized'))
-saveRDS(biotic_list_dist,file = paste0(savingdir,'/','biotic_list_dist'))
-saveRDS(biotic_list_dist_at_least_two,file = paste0(savingdir,'/','biotic_list_dist_at_least_two'))
+saveRDS(biotic_list_dist_matrices_all_grump$biotic_list_dist_all_ASVs,file = paste0(savingdir,'/','biotic_list_dist_matrices_all_grump'))
+saveRDS(biotic_list_dist_matrices_phyto$biotic_list_dist_all_ASVs,file = paste0(savingdir,'/','biotic_list_dist_matrices_phyto'))
+saveRDS(biotic_list_dist_matrices_zoop$biotic_list_dist_all_ASVs,file = paste0(savingdir,'/','biotic_list_dist_matrices_zoop'))
+
+saveRDS(biotic_list_dist_matrices_all_grump$biotic_list_dist_not_rare_ASVs,file = paste0(savingdir,'/','biotic_list_dist_matrices_all_grump_not_sparse'))
+saveRDS(biotic_list_dist_matrices_phyto$biotic_list_dist_not_rare_ASVs,file = paste0(savingdir,'/','biotic_list_dist_matrices_phyto_not_sparse'))
+saveRDS(biotic_list_dist_matrices_zoop$biotic_list_dist_not_rare_ASVs,file = paste0(savingdir,'/','biotic_list_dist_matrices_zoop_sparse'))
 
 ##################################################################################################
 # MDS_Coordinates ################################################################################
 ##################################################################################################
+biotic_list_dist_matrices_all_grump = readRDS(file = paste0(savingdir,'/','biotic_list_dist_matrices_all_grump'))
+biotic_list_dist_matrices_phyto = readRDS(file = paste0(savingdir,'/','biotic_list_dist_matrices_phyto'))
+biotic_list_dist_matrices_zoop = readRDS(file = paste0(savingdir,'/','biotic_list_dist_matrices_zoop'))
+
+
 
 ### Future work
 # cmdscale(d = as.dist(justin_list$dist_matrices$biotic),k = 3,eig = T,add=T)
 # pct_explained = round(100 * mds_obj$eig/sum(mds_obj$eig),1)
 
-list_mds_coord <- list(
-  ASV = cmdscale(biotic_list_dist$ASV,k = 3),
-  Species = cmdscale(biotic_list_dist$Species,k = 3),
-  Genus = cmdscale(biotic_list_dist$Genus,k = 3),
-  Family = cmdscale(biotic_list_dist$Family,k = 3),
-  Order = cmdscale(biotic_list_dist$Order,k = 3),
-  Class = cmdscale(biotic_list_dist$Class,k = 3),
-  Division = cmdscale(biotic_list_dist$Division,k = 3),
-  Supergroup = cmdscale(biotic_list_dist$Supergroup,k = 3)
+list_mds_coord_all_grump <- list(
+  ASV = cmdscale(biotic_list_dist_matrices_all_grump$ASV,k = 3),
+  Species = cmdscale(biotic_list_dist_matrices_all_grump$Species,k = 3),
+  Genus = cmdscale(biotic_list_dist_matrices_all_grump$Genus,k = 3),
+  Family = cmdscale(biotic_list_dist_matrices_all_grump$Family,k = 3),
+  Order = cmdscale(biotic_list_dist_matrices_all_grump$Order,k = 3),
+  Class = cmdscale(biotic_list_dist_matrices_all_grump$Class,k = 3),
+  Phylum = cmdscale(biotic_list_dist_matrices_all_grump$Phylum,k = 3),
+  Domain = cmdscale(biotic_list_dist_matrices_all_grump$Domain,k = 3),
+  Division = cmdscale(biotic_list_dist_matrices_all_grump$Division,k = 3),
+  Supergroup = cmdscale(biotic_list_dist_matrices_all_grump$Supergroup,k = 3)
 )
 
-saveRDS(list_mds_coord,file = paste0(savingdir,'/','list_mds_coord'))
+saveRDS(list_mds_coord_all_grump,file = paste0(savingdir,'/','list_mds_coord_all_grump'))
+
+list_mds_coord_phyto <- list(
+  ASV = cmdscale(biotic_list_dist_matrices_phyto$ASV,k = 3),
+  Species = cmdscale(biotic_list_dist_matrices_phyto$Species,k = 3),
+  Genus = cmdscale(biotic_list_dist_matrices_phyto$Genus,k = 3),
+  Family = cmdscale(biotic_list_dist_matrices_phyto$Family,k = 3),
+  Order = cmdscale(biotic_list_dist_matrices_phyto$Order,k = 3),
+  Class = cmdscale(biotic_list_dist_matrices_phyto$Class,k = 3),
+  Phylum = cmdscale(biotic_list_dist_matrices_phyto$Phylum,k = 3),
+  Domain = cmdscale(biotic_list_dist_matrices_phyto$Domain,k = 3),
+  Division = cmdscale(biotic_list_dist_matrices_phyto$Division,k = 3),
+  Supergroup = cmdscale(biotic_list_dist_matrices_phyto$Supergroup,k = 3)
+)
+
+saveRDS(list_mds_coord_phyto,file = paste0(savingdir,'/','list_mds_coord_phyto'))
+
+list_mds_coord_zoop <- list(
+  ASV = cmdscale(biotic_list_dist_matrices_zoop$ASV,k = 3),
+  Species = cmdscale(biotic_list_dist_matrices_zoop$Species,k = 3),
+  Genus = cmdscale(biotic_list_dist_matrices_zoop$Genus,k = 3),
+  Family = cmdscale(biotic_list_dist_matrices_zoop$Family,k = 3),
+  Order = cmdscale(biotic_list_dist_matrices_zoop$Order,k = 3),
+  Class = cmdscale(biotic_list_dist_matrices_zoop$Class,k = 3),
+  Phylum = cmdscale(biotic_list_dist_matrices_zoop$Phylum,k = 3),
+  Domain = cmdscale(biotic_list_dist_matrices_zoop$Domain,k = 3),
+  Division = cmdscale(biotic_list_dist_matrices_zoop$Division,k = 3),
+  Supergroup = cmdscale(biotic_list_dist_matrices_zoop$Supergroup,k = 3)
+)
+
+saveRDS(list_mds_coord_zoop,file = paste0(savingdir,'/','list_mds_coord_zoop'))
+
 
 ##################################################################################################
-# Taxonomic ################################################################################
+# Ecologic Groups ################################################################################
 ##################################################################################################
+## All
+eco_groups_all_grump_tax_lat_depth = df_grump_all %>% 
+  mutate(Eco_relevant_plank_groups=ifelse(Eco_relevant_plank_groups=='','NotAssigned',Eco_relevant_plank_groups)) %>% 
+  group_by(SampleID,Eco_relevant_plank_groups) %>% 
+  summarise(Raw.Sequence.Counts=sum(Raw.Sequence.Counts)) %>% 
+  select(SampleID,Eco_relevant_plank_groups,Raw.Sequence.Counts) %>% distinct() %>% 
+  group_by(SampleID,Eco_relevant_plank_groups) %>% 
+  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
+  tidyr::pivot_wider(id_cols = SampleID,names_from = Eco_relevant_plank_groups ,
+                     values_from = Sum_RawCounts,
+                     values_fill = 0.01) %>%
+  data.frame() %>% 
+  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
+  relocate(SampleID,sort(names(.))) %>% 
+  arrange(SampleID) %>% 
+  left_join(list_geo_abiotics$all %>% select(SampleID,Latitude,Depth)) 
 
-####-TODO
+## Phyto
+eco_groups_phyto_tax_lat_depth = df_grump_phyto %>% 
+  mutate(Eco_relevant_plank_groups=ifelse(Eco_relevant_plank_groups=='','NotAssigned',Eco_relevant_plank_groups)) %>% 
+  group_by(SampleID,Eco_relevant_plank_groups) %>% 
+  summarise(Raw.Sequence.Counts=sum(Raw.Sequence.Counts)) %>% 
+  select(SampleID,Eco_relevant_plank_groups,Raw.Sequence.Counts) %>% distinct() %>% 
+  group_by(SampleID,Eco_relevant_plank_groups) %>% 
+  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
+  tidyr::pivot_wider(id_cols = SampleID,names_from = Eco_relevant_plank_groups ,
+                     values_from = Sum_RawCounts,
+                     values_fill = 0.01) %>%
+  data.frame() %>% 
+  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
+  relocate(SampleID,sort(names(.))) %>% 
+  arrange(SampleID) %>% 
+  left_join(list_geo_abiotics$phyto %>% select(SampleID,Latitude,Depth)) 
+
+## zoop
+eco_groups_zoop_tax_lat_depth = df_grump_zoop %>% 
+  mutate(Eco_relevant_plank_groups=ifelse(Eco_relevant_plank_groups=='','NotAssigned',Eco_relevant_plank_groups)) %>% 
+  group_by(SampleID,Eco_relevant_plank_groups) %>% 
+  summarise(Raw.Sequence.Counts=sum(Raw.Sequence.Counts)) %>% 
+  select(SampleID,Eco_relevant_plank_groups,Raw.Sequence.Counts) %>% distinct() %>% 
+  group_by(SampleID,Eco_relevant_plank_groups) %>% 
+  summarise(Sum_RawCounts = sum(Raw.Sequence.Counts)) %>% ungroup %>% 
+  tidyr::pivot_wider(id_cols = SampleID,names_from = Eco_relevant_plank_groups ,
+                     values_from = Sum_RawCounts,
+                     values_fill = 0.01) %>%
+  data.frame() %>% 
+  mutate(across(where(is.numeric))/rowSums(across(where(is.numeric)))) %>% 
+  relocate(SampleID,sort(names(.))) %>% 
+  arrange(SampleID) %>% 
+  left_join(list_geo_abiotics$zoop %>% select(SampleID,Latitude,Depth)) 
+
+saveRDS(eco_groups_zoop_tax_lat_depth,paste0(savingdir,'/eco_groups_zoop_tax_lat_depth'))
+saveRDS(eco_groups_phyto_tax_lat_depth,paste0(savingdir,'/eco_groups_phyto_tax_lat_depth'))
+saveRDS(eco_groups_all_grump_tax_lat_depth,paste0(savingdir,'/eco_groups_all_grump_tax_lat_depth'))
 
